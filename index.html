@@ -4,113 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>霜夜に灯る刃</title>
-  <style>
-    :root {
-      --bg: #0f1014;
-      --panel: #181b22;
-      --text: #f5f7fb;
-      --muted: #c4ccd8;
-      --accent: #7fd4ff;
-      --accent2: #ffd36e;
-      --border: rgba(255,255,255,0.12);
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, sans-serif;
-      background:
-        radial-gradient(circle at top, rgba(127,212,255,0.08), transparent 30%),
-        linear-gradient(180deg, #0b0c10 0%, #12151d 100%);
-      color: var(--text);
-      line-height: 2;
-      letter-spacing: 0.03em;
-    }
-
-    .wrap {
-      width: min(920px, calc(100% - 32px));
-      margin: 32px auto 64px;
-    }
-
-    .hero {
-      border: 1px solid var(--border);
-      background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
-      border-radius: 24px;
-      padding: 28px 24px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.28);
-      margin-bottom: 24px;
-    }
-
-    .tag {
-      display: inline-block;
-      padding: 6px 12px;
-      border-radius: 999px;
-      background: rgba(127,212,255,0.12);
-      color: var(--accent);
-      font-size: 14px;
-      margin-bottom: 14px;
-      border: 1px solid rgba(127,212,255,0.18);
-    }
-
-    h1 {
-      margin: 0 0 10px;
-      font-size: clamp(28px, 5vw, 42px);
-      line-height: 1.3;
-    }
-
-    .subtitle {
-      margin: 0;
-      color: var(--muted);
-      font-size: 15px;
-    }
-
-    .novel {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 24px;
-      padding: clamp(20px, 4vw, 36px);
-      box-shadow: 0 10px 30px rgba(0,0,0,0.24);
-    }
-
-    .novel p {
-      margin: 0 0 1.35em;
-      text-indent: 1em;
-      font-size: 17px;
-    }
-
-    .novel p.center {
-      text-indent: 0;
-      text-align: center;
-      color: var(--accent2);
-      letter-spacing: 0.2em;
-      margin: 2em 0;
-    }
-
-    .footer {
-      margin-top: 20px;
-      color: var(--muted);
-      font-size: 13px;
-      text-align: center;
-    }
-
-    @media (max-width: 640px) {
-      .wrap {
-        width: min(100% - 20px, 920px);
-        margin: 16px auto 32px;
-      }
-
-      .hero,
-      .novel {
-        border-radius: 18px;
-      }
-
-      .novel p {
-        font-size: 16px;
-        line-height: 1.95;
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main class="wrap">
@@ -295,8 +189,7 @@
       <p>霜に閉ざされた夜を越えて、朝は来る。その朝を信じて生きることこそが、きっと人の強さなのだと、彼女はようやく知ったのだった。</p>
     </article>
 
-    <p class="footer">このHTMLは単体で保存してブラウザで開けば、そのまま読めます。</p>
+    <p class="footer">index.html と style.css を同じフォルダに置いて開いてください。</p>
   </main>
 </body>
 </html>
-
