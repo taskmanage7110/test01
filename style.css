@@ -64,6 +64,7 @@ h1 {
 /* 本文を縦書き */
 .novel {
   writing-mode: vertical-rl;
+  direction: rtl;   /* ←これが右綴じの本体 */
   text-orientation: mixed;
   -webkit-writing-mode: vertical-rl;
   -ms-writing-mode: tb-rl;
