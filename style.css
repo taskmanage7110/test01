@@ -103,3 +103,32 @@ h1 {
     line-height: 1.95;
   }
 }
+
+/* ===== 縦書き設定 ===== */
+.vertical {
+  writing-mode: vertical-rl;
+}
+
+/* 本文 */
+.vertical .novel {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  overflow-x: auto;
+  height: 80vh;
+}
+
+/* 段落間 */
+.vertical .novel p {
+  margin: 0 1em 0 0;
+  text-indent: 1em;
+}
+
+/* タイトルを縦に */
+.vertical h1 {
+  writing-mode: vertical-rl;
+}
+
+/* ヘッダーは横のままにする */
+.vertical .hero {
+  writing-mode: horizontal-tb;
+}
