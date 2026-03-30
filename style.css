@@ -8,30 +8,33 @@
   --border: rgba(255,255,255,0.12);
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
   font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, sans-serif;
   background:
-    radial-gradient(circle at top, rgba(127,212,255,0.08), transparent 30%),
+    radial-gradient(circle at top, rgba(127, 212, 255, 0.08), transparent 30%),
     linear-gradient(180deg, #0b0c10 0%, #12151d 100%);
   color: var(--text);
-  line-height: 2;
-  letter-spacing: 0.03em;
 }
 
+/* 全体 */
 .wrap {
-  width: min(920px, calc(100% - 32px));
-  margin: 32px auto 64px;
+  width: min(100%, 1200px);
+  margin: 24px auto;
+  padding: 16px;
 }
 
+/* ヘッダーは横書きのまま */
 .hero {
+  writing-mode: horizontal-tb;
   border: 1px solid var(--border);
   background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
   border-radius: 24px;
-  padding: 28px 24px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.28);
+  padding: 24px;
   margin-bottom: 24px;
 }
 
@@ -58,18 +61,29 @@ h1 {
   font-size: 15px;
 }
 
+/* 本文を縦書き */
 .novel {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  -webkit-writing-mode: vertical-rl;
+  -ms-writing-mode: tb-rl;
+
+  height: 80vh;
+  overflow-x: auto;
+  overflow-y: hidden;
+
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 24px;
-  padding: clamp(20px, 4vw, 36px);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.24);
+  padding: 24px;
+
+  line-height: 2.2;
+  font-size: 18px;
 }
 
 .novel p {
-  margin: 0 0 1.35em;
+  margin: 0 0 0 1.4em;
   text-indent: 1em;
-  font-size: 17px;
 }
 
 .novel p.center {
@@ -77,10 +91,10 @@ h1 {
   text-align: center;
   color: var(--accent2);
   letter-spacing: 0.2em;
-  margin: 2em 0;
 }
 
 .footer {
+  writing-mode: horizontal-tb;
   margin-top: 20px;
   color: var(--muted);
   font-size: 13px;
@@ -89,8 +103,8 @@ h1 {
 
 @media (max-width: 640px) {
   .wrap {
-    width: min(100% - 20px, 920px);
-    margin: 16px auto 32px;
+    padding: 10px;
+    margin: 12px auto;
   }
 
   .hero,
@@ -98,37 +112,10 @@ h1 {
     border-radius: 18px;
   }
 
-  .novel p {
+  .novel {
+    height: 75vh;
     font-size: 16px;
-    line-height: 1.95;
+    line-height: 2;
+    padding: 16px;
   }
-}
-
-/* ===== 縦書き設定 ===== */
-.vertical {
-  writing-mode: vertical-rl;
-}
-
-/* 本文 */
-.vertical .novel {
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  overflow-x: auto;
-  height: 80vh;
-}
-
-/* 段落間 */
-.vertical .novel p {
-  margin: 0 1em 0 0;
-  text-indent: 1em;
-}
-
-/* タイトルを縦に */
-.vertical h1 {
-  writing-mode: vertical-rl;
-}
-
-/* ヘッダーは横のままにする */
-.vertical .hero {
-  writing-mode: horizontal-tb;
 }
