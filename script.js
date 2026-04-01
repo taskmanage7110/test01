@@ -7,9 +7,6 @@
     return;
   }
 
-  // =========================
-  // 1) 元本文を材料として保持
-  // =========================
   const sourceItems = Array.from(sourceNovel.childNodes)
     .filter((node) => {
       if (node.nodeType === Node.TEXT_NODE) {
@@ -30,26 +27,23 @@
       };
     }
 
-    const el = /** @type {HTMLElement} */ (node);
+    const el = node.cloneNode(true);
     const hasNestedElements = el.querySelector("*") !== null;
 
     if (!hasNestedElements) {
       return {
         type: "text-element",
-        template: /** @type {HTMLElement} */ (el.cloneNode(false)),
+        template: el.cloneNode(false),
         text: el.textContent ?? "",
       };
     }
 
     return {
       type: "complex-element",
-      template: /** @type {HTMLElement} */ (el.cloneNode(true)),
+      template: el.cloneNode(true),
     };
   }
 
-  // =========================
-  // 2) HTMLを触らずUIをJSで追加
-  // =========================
   const shell = document.createElement("section");
   shell.className = "pb-reader-shell";
 
@@ -62,7 +56,7 @@
 
   const info = document.createElement("div");
   info.className = "pb-reader-info";
-  info.innerHTML = `<span class="pb-page-now">1</span> / <span class="pb-page-total">1</span>`;
+  info.innerHTML = `<span class="pb-page-now">1</span> / <span class="pb-page-total">?</span>`;
 
   const nextBtn = document.createElement("button");
   nextBtn.type = "button";
@@ -83,12 +77,8 @@
   shell.append(controls, viewport);
   sourceNovel.parentNode.insertBefore(shell, sourceNovel);
 
-  // 元本文は分割元として残しつつ非表示
   sourceNovel.style.display = "none";
 
-  // =========================
-  // 3) CSSもJSで注入
-  // =========================
   const style = document.createElement("style");
   style.textContent = `
     .pb-reader-shell {
@@ -171,10 +161,26 @@
       text-align: center;
     }
 
+    .pb-page-current {
+      transform: translateX(0);
+      opacity: 1;
+      z-index: 1;
+    }
+
     .pb-page-incoming {
       display: none;
+      opacity: 1;
+      z-index: 2;
+    }
+
+    .pb-page-incoming.from-right {
+      display: block;
       transform: translateX(100%);
-      opacity: 0.98;
+    }
+
+    .pb-page-incoming.from-left {
+      display: block;
+      transform: translateX(-100%);
     }
 
     .pb-viewport.is-animating-next .pb-page-current {
@@ -183,8 +189,7 @@
       opacity: 0.45;
     }
 
-    .pb-viewport.is-animating-next .pb-page-incoming {
-      display: block;
+    .pb-viewport.is-animating-next .pb-page-incoming.from-right {
       transition: transform 280ms ease;
       transform: translateX(0);
     }
@@ -195,9 +200,7 @@
       opacity: 0.45;
     }
 
-    .pb-viewport.is-animating-prev .pb-page-incoming {
-      display: block;
-      transform: translateX(-100%);
+    .pb-viewport.is-animating-prev .pb-page-incoming.from-left {
       transition: transform 280ms ease;
       transform: translateX(0);
     }
@@ -225,26 +228,16 @@
   `;
   document.head.appendChild(style);
 
-  // =========================
-  // 4) 状態
-  // =========================
   const state = {
-    currentPage: null,     // { startCursor, endCursor, nodes }
-    nextPage: null,        // 遅延生成キャッシュ
-    history: [],           // 前ページ用
+    currentPage: null,
+    nextPage: null,
+    history: [],
     isAnimating: false,
     repaginateTimer: null,
   };
 
-  // カーソル: { index, offset }
-  // index: sourceItems の何番目から読むか
-  // offset: text-element 内の何文字目から読むか
   function makeCursor(index = 0, offset = 0) {
     return { index, offset };
-  }
-
-  function isEndCursor(cursor) {
-    return cursor.index >= sourceItems.length;
   }
 
   function cloneCursor(cursor) {
@@ -255,6 +248,10 @@
     return a.index === b.index && a.offset === b.offset;
   }
 
+  function isEndCursor(cursor) {
+    return cursor.index >= sourceItems.length;
+  }
+
   function getNowEl() {
     return shell.querySelector(".pb-page-now");
   }
@@ -263,9 +260,6 @@
     return shell.querySelector(".pb-page-total");
   }
 
-  // =========================
-  // 5) 測定用ページ
-  // =========================
   function createMeasureBox() {
     const layer = document.createElement("div");
     layer.className = "pb-hidden-layer";
@@ -306,7 +300,7 @@
   }
 
   function createTextNodeFromItem(item, startOffset, endOffset = null) {
-    const el = /** @type {HTMLElement} */ (item.template.cloneNode(false));
+    const el = item.template.cloneNode(false);
     const full = item.text ?? "";
     const text = endOffset == null ? full.slice(startOffset) : full.slice(startOffset, endOffset);
     el.textContent = text;
@@ -337,13 +331,9 @@
     return best;
   }
 
-  // =========================
-  // 6) 「現在カーソルから1ページだけ」生成
-  // =========================
   function generatePageFromCursor(startCursor) {
     const cursor = cloneCursor(startCursor);
     const currentNodes = [];
-
     const { box: measureBox, destroy } = createMeasureBox();
 
     while (cursor.index < sourceItems.length) {
@@ -360,20 +350,16 @@
         }
 
         if (currentNodes.length === 0) {
-          // 1ページに収まらない複雑要素は最小実装ではそのまま置く
           currentNodes.push(node);
           cursor.index += 1;
           cursor.offset = 0;
         }
-
         break;
       }
 
-      // text-element
       const text = item.text ?? "";
       const startOffset = cursor.offset;
 
-      // すでに末尾なら次へ
       if (startOffset >= text.length) {
         cursor.index += 1;
         cursor.offset = 0;
@@ -409,9 +395,6 @@
     };
   }
 
-  // =========================
-  // 7) 描画 / ページ数表示
-  // =========================
   function renderNodes(layer, nodes) {
     layer.innerHTML = "";
     for (const n of nodes) {
@@ -425,24 +408,20 @@
 
   function updateInfo() {
     getNowEl().textContent = String(approximatePageNumber());
-    getTotalEl().textContent = state.nextPage || (state.currentPage && isEndCursor(state.currentPage.endCursor))
-      ? "?"
-      : "?";
-
+    getTotalEl().textContent = "?";
     prevBtn.disabled = state.history.length === 0 || state.isAnimating;
     nextBtn.disabled = !!(state.currentPage && isEndCursor(state.currentPage.endCursor)) || state.isAnimating;
   }
 
-  // =========================
-  // 8) 遅延で次ページを生成
-  // =========================
   function scheduleNextPageWarmup() {
     if (!state.currentPage) return;
+
     if (isEndCursor(state.currentPage.endCursor)) {
       state.nextPage = null;
       updateInfo();
       return;
     }
+
     if (state.nextPage && cursorEquals(state.nextPage.startCursor, state.currentPage.endCursor)) {
       updateInfo();
       return;
@@ -461,24 +440,27 @@
     }
   }
 
-  // =========================
-  // 9) 初期化
-  // =========================
+  function resetIncomingLayer() {
+    incomingLayer.innerHTML = "";
+    incomingLayer.classList.remove("from-right", "from-left");
+    incomingLayer.style.display = "none";
+  }
+
   function initialize() {
     state.history = [];
     state.nextPage = null;
+    state.isAnimating = false;
+    viewport.classList.remove("is-animating-next", "is-animating-prev");
+
     state.currentPage = generatePageFromCursor(makeCursor(0, 0));
     renderNodes(currentLayer, state.currentPage.nodes);
-    incomingLayer.innerHTML = "";
-    incomingLayer.style.display = "none";
-    incomingLayer.style.transform = "translateX(100%)";
+    resetIncomingLayer();
     updateInfo();
+
+    // 初期表示直後に次ページを温める
     scheduleNextPageWarmup();
   }
 
-  // =========================
-  // 10) 次ページへ（右からスライドイン）
-  // =========================
   function goNext() {
     if (state.isAnimating || !state.currentPage) return;
     if (isEndCursor(state.currentPage.endCursor)) return;
@@ -491,26 +473,23 @@
 
     renderNodes(incomingLayer, targetPage.nodes);
     incomingLayer.style.display = "block";
-    incomingLayer.style.transform = "translateX(100%)";
-
-    // reflow
-    void incomingLayer.offsetWidth;
+    incomingLayer.classList.remove("from-left");
+    incomingLayer.classList.add("from-right");
 
     viewport.classList.remove("is-animating-prev");
+    void incomingLayer.offsetWidth;
     viewport.classList.add("is-animating-next");
 
     const done = () => {
-      viewport.classList.remove("is-animating-next");
       incomingLayer.removeEventListener("transitionend", done);
+      viewport.classList.remove("is-animating-next");
 
-      // 履歴に現在ページを保存
       state.history.push({
         startCursor: cloneCursor(state.currentPage.startCursor),
         endCursor: cloneCursor(state.currentPage.endCursor),
         nodes: state.currentPage.nodes.map((n) => n.cloneNode(true)),
       });
 
-      // current を次ページへ更新
       state.currentPage = {
         startCursor: cloneCursor(targetPage.startCursor),
         endCursor: cloneCursor(targetPage.endCursor),
@@ -518,10 +497,7 @@
       };
 
       renderNodes(currentLayer, state.currentPage.nodes);
-
-      incomingLayer.innerHTML = "";
-      incomingLayer.style.display = "none";
-      incomingLayer.style.transform = "translateX(100%)";
+      resetIncomingLayer();
 
       state.nextPage = null;
       state.isAnimating = false;
@@ -532,9 +508,6 @@
     incomingLayer.addEventListener("transitionend", done, { once: true });
   }
 
-  // =========================
-  // 11) 前ページへ（履歴から復元）
-  // =========================
   function goPrev() {
     if (state.isAnimating) return;
     if (state.history.length === 0) return;
@@ -547,25 +520,20 @@
 
     renderNodes(incomingLayer, prevPage.nodes);
     incomingLayer.style.display = "block";
-    incomingLayer.style.transform = "translateX(-100%)";
-
-    // reflow
-    void incomingLayer.offsetWidth;
+    incomingLayer.classList.remove("from-right");
+    incomingLayer.classList.add("from-left");
 
     viewport.classList.remove("is-animating-next");
+    void incomingLayer.offsetWidth;
     viewport.classList.add("is-animating-prev");
 
     const done = () => {
-      viewport.classList.remove("is-animating-prev");
       incomingLayer.removeEventListener("transitionend", done);
+      viewport.classList.remove("is-animating-prev");
 
       state.currentPage = state.history.pop();
-
       renderNodes(currentLayer, state.currentPage.nodes);
-
-      incomingLayer.innerHTML = "";
-      incomingLayer.style.display = "none";
-      incomingLayer.style.transform = "translateX(100%)";
+      resetIncomingLayer();
 
       state.nextPage = null;
       state.isAnimating = false;
@@ -576,9 +544,6 @@
     incomingLayer.addEventListener("transitionend", done, { once: true });
   }
 
-  // =========================
-  // 12) イベント
-  // =========================
   nextBtn.addEventListener("click", goNext);
   prevBtn.addEventListener("click", goPrev);
 
@@ -587,7 +552,6 @@
     const rect = viewport.getBoundingClientRect();
     const x = e.clientX - rect.left;
 
-    // 右綴じ: 左半分で次へ / 右半分で前へ
     if (x < rect.width / 2) {
       goNext();
     } else {
