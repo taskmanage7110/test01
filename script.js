@@ -7,26 +7,62 @@
     return;
   }
 
-  const originalChildren = Array.from(sourceNovel.childNodes);
+  // =========================
+  // 1) 元本文を材料として保持
+  // =========================
+  const sourceItems = Array.from(sourceNovel.childNodes)
+    .filter((node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        return (node.textContent ?? "").trim() !== "";
+      }
+      return node.nodeType === Node.ELEMENT_NODE;
+    })
+    .map((node) => normalizeSourceNode(node));
 
-  let currentPageIndex = 0;
-  let pages = [];
-  let repaginateTimer = null;
+  function normalizeSourceNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const p = document.createElement("p");
+      p.textContent = (node.textContent ?? "").trim();
+      return {
+        type: "text-element",
+        template: p.cloneNode(false),
+        text: p.textContent ?? "",
+      };
+    }
 
-  // ===== UIをJSで後付け生成（HTMLは手で編集しない） =====
-  const readerShell = document.createElement("section");
-  readerShell.className = "js-reader-shell";
+    const el = /** @type {HTMLElement} */ (node);
+    const hasNestedElements = el.querySelector("*") !== null;
+
+    if (!hasNestedElements) {
+      return {
+        type: "text-element",
+        template: /** @type {HTMLElement} */ (el.cloneNode(false)),
+        text: el.textContent ?? "",
+      };
+    }
+
+    return {
+      type: "complex-element",
+      template: /** @type {HTMLElement} */ (el.cloneNode(true)),
+    };
+  }
+
+  // =========================
+  // 2) HTMLを触らずUIをJSで追加
+  // =========================
+  const shell = document.createElement("section");
+  shell.className = "pb-reader-shell";
 
   const controls = document.createElement("div");
-  controls.className = "js-reader-controls";
+  controls.className = "pb-reader-controls";
 
   const prevBtn = document.createElement("button");
   prevBtn.type = "button";
   prevBtn.textContent = "前へ";
 
   const info = document.createElement("div");
-  info.className = "js-reader-info";
-  info.innerHTML = `<span class="js-page-now">1</span> / <span class="js-page-total">1</span>`;
+  info.className = "pb-reader-info";
+  info.innerHTML = `<span class="pb-page-now">1</span> / <span class="pb-page-total">1</span>`;
 
   const nextBtn = document.createElement("button");
   nextBtn.type = "button";
@@ -35,29 +71,31 @@
   controls.append(prevBtn, info, nextBtn);
 
   const viewport = document.createElement("div");
-  viewport.className = "js-reader-viewport";
+  viewport.className = "pb-viewport";
 
-  const page = document.createElement("article");
-  page.className = "js-reader-page";
-  viewport.appendChild(page);
+  const currentLayer = document.createElement("article");
+  currentLayer.className = "pb-page pb-page-current";
 
-  readerShell.append(controls, viewport);
+  const incomingLayer = document.createElement("article");
+  incomingLayer.className = "pb-page pb-page-incoming";
 
-  // 元の本文の直前に挿入
-  sourceNovel.parentNode.insertBefore(readerShell, sourceNovel);
+  viewport.append(currentLayer, incomingLayer);
+  shell.append(controls, viewport);
+  sourceNovel.parentNode.insertBefore(shell, sourceNovel);
 
-  // 元本文は「分割元」として残しつつ非表示
+  // 元本文は分割元として残しつつ非表示
   sourceNovel.style.display = "none";
 
-  // ===== CSSもJSで注入（style.css手編集も不要） =====
+  // =========================
+  // 3) CSSもJSで注入
+  // =========================
   const style = document.createElement("style");
   style.textContent = `
-    .js-reader-shell {
-      margin-top: 16px;
-      margin-bottom: 16px;
+    .pb-reader-shell {
+      margin: 16px 0;
     }
 
-    .js-reader-controls {
+    .pb-reader-controls {
       writing-mode: horizontal-tb;
       display: flex;
       align-items: center;
@@ -66,7 +104,7 @@
       margin-bottom: 14px;
     }
 
-    .js-reader-controls button {
+    .pb-reader-controls button {
       border: 1px solid rgba(255,255,255,0.12);
       background: rgba(255,255,255,0.06);
       color: inherit;
@@ -76,31 +114,33 @@
       font: inherit;
     }
 
-    .js-reader-controls button:disabled {
-      opacity: 0.4;
+    .pb-reader-controls button:disabled {
+      opacity: 0.45;
       cursor: default;
     }
 
-    .js-reader-info {
+    .pb-reader-info {
       min-width: 88px;
       text-align: center;
+      writing-mode: horizontal-tb;
     }
 
-    .js-reader-viewport {
+    .pb-viewport {
       width: 100%;
       height: min(78vh, 980px);
       min-height: 360px;
+      position: relative;
+      overflow: hidden;
       border: 1px solid rgba(255,255,255,0.12);
       border-radius: 18px;
-      overflow: hidden;
-      position: relative;
-      background: rgba(255,255,255,0.02);
+      background: rgba(255,255,255,0.03);
     }
 
-    .js-reader-page,
-    .js-reader-measure {
+    .pb-page,
+    .pb-measure {
       width: 100%;
       height: 100%;
+      box-sizing: border-box;
       padding: 24px;
       overflow: hidden;
       writing-mode: vertical-rl;
@@ -109,22 +149,60 @@
       line-height: 2.1;
       font-size: 18px;
       letter-spacing: 0.03em;
-      box-sizing: border-box;
+      background: rgba(255,255,255,0.02);
     }
 
-    .js-reader-page p,
-    .js-reader-measure p {
+    .pb-page {
+      position: absolute;
+      inset: 0;
+      will-change: transform, opacity;
+      backface-visibility: hidden;
+    }
+
+    .pb-page p,
+    .pb-measure p {
       margin: 0 0 0 1.35em;
       text-indent: 1em;
     }
 
-    .js-reader-page .center,
-    .js-reader-measure .center {
+    .pb-page .center,
+    .pb-measure .center {
       text-indent: 0;
       text-align: center;
     }
 
-    .js-reader-hidden-layer {
+    .pb-page-incoming {
+      display: none;
+      transform: translateX(100%);
+      opacity: 0.98;
+    }
+
+    .pb-viewport.is-animating-next .pb-page-current {
+      transition: transform 280ms ease, opacity 280ms ease;
+      transform: translateX(-18%);
+      opacity: 0.45;
+    }
+
+    .pb-viewport.is-animating-next .pb-page-incoming {
+      display: block;
+      transition: transform 280ms ease;
+      transform: translateX(0);
+    }
+
+    .pb-viewport.is-animating-prev .pb-page-current {
+      transition: transform 280ms ease, opacity 280ms ease;
+      transform: translateX(18%);
+      opacity: 0.45;
+    }
+
+    .pb-viewport.is-animating-prev .pb-page-incoming {
+      display: block;
+      transform: translateX(-100%);
+      transition: transform 280ms ease;
+      transform: translateX(0);
+    }
+
+    .pb-hidden-layer {
       position: fixed;
       left: -999999px;
       top: 0;
@@ -134,33 +212,66 @@
     }
 
     @media (max-width: 640px) {
-      .js-reader-page,
-      .js-reader-measure {
+      .pb-page,
+      .pb-measure {
         padding: 16px;
         font-size: 16px;
       }
 
-      .js-reader-viewport {
+      .pb-viewport {
         height: 72vh;
       }
     }
   `;
   document.head.appendChild(style);
 
+  // =========================
+  // 4) 状態
+  // =========================
+  const state = {
+    currentPage: null,     // { startCursor, endCursor, nodes }
+    nextPage: null,        // 遅延生成キャッシュ
+    history: [],           // 前ページ用
+    isAnimating: false,
+    repaginateTimer: null,
+  };
+
+  // カーソル: { index, offset }
+  // index: sourceItems の何番目から読むか
+  // offset: text-element 内の何文字目から読むか
+  function makeCursor(index = 0, offset = 0) {
+    return { index, offset };
+  }
+
+  function isEndCursor(cursor) {
+    return cursor.index >= sourceItems.length;
+  }
+
+  function cloneCursor(cursor) {
+    return { index: cursor.index, offset: cursor.offset };
+  }
+
+  function cursorEquals(a, b) {
+    return a.index === b.index && a.offset === b.offset;
+  }
+
   function getNowEl() {
-    return readerShell.querySelector(".js-page-now");
+    return shell.querySelector(".pb-page-now");
   }
 
   function getTotalEl() {
-    return readerShell.querySelector(".js-page-total");
+    return shell.querySelector(".pb-page-total");
   }
 
+  // =========================
+  // 5) 測定用ページ
+  // =========================
   function createMeasureBox() {
     const layer = document.createElement("div");
-    layer.className = "js-reader-hidden-layer";
+    layer.className = "pb-hidden-layer";
 
     const box = document.createElement("article");
-    box.className = "js-reader-measure";
+    box.className = "pb-measure";
 
     const rect = viewport.getBoundingClientRect();
     box.style.width = `${Math.floor(rect.width)}px`;
@@ -170,11 +281,10 @@
     document.body.appendChild(layer);
 
     return {
-      layer,
       box,
       destroy() {
         layer.remove();
-      }
+      },
     };
   }
 
@@ -182,234 +292,324 @@
     return el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight;
   }
 
-  function serializeChildren(el) {
-    return Array.from(el.childNodes).map((n) => n.cloneNode(true));
+  function clearAndFillMeasure(measureBox, nodes) {
+    measureBox.innerHTML = "";
+    for (const n of nodes) {
+      measureBox.appendChild(n.cloneNode(true));
+    }
   }
 
-  function makePageFragment(nodes) {
-    const frag = document.createDocumentFragment();
-    nodes.forEach((n) => frag.appendChild(n.cloneNode(true)));
-    return frag;
+  function appendIfFits(measureBox, currentNodes, candidateNode) {
+    clearAndFillMeasure(measureBox, currentNodes);
+    measureBox.appendChild(candidateNode.cloneNode(true));
+    return !overflowed(measureBox);
   }
 
-  function createElementLike(el) {
-    return /** @type {HTMLElement} */ (el.cloneNode(false));
+  function createTextNodeFromItem(item, startOffset, endOffset = null) {
+    const el = /** @type {HTMLElement} */ (item.template.cloneNode(false));
+    const full = item.text ?? "";
+    const text = endOffset == null ? full.slice(startOffset) : full.slice(startOffset, endOffset);
+    el.textContent = text;
+    return el;
   }
 
-  function fitTextIntoElement(text, templateEl, measureBox, currentNodes) {
+  function countFitChars(item, startOffset, measureBox, currentNodes) {
+    const text = item.text ?? "";
+    const maxLen = text.length - startOffset;
+
     let low = 0;
-    let high = text.length;
+    let high = maxLen;
     let best = 0;
 
     while (low <= high) {
       const mid = (low + high) >> 1;
+      const candidate = createTextNodeFromItem(item, startOffset, startOffset + mid);
+      const fits = appendIfFits(measureBox, currentNodes, candidate);
 
-      measureBox.innerHTML = "";
-      currentNodes.forEach((n) => measureBox.appendChild(n.cloneNode(true)));
-
-      const candidate = createElementLike(templateEl);
-      candidate.textContent = text.slice(0, mid);
-      measureBox.appendChild(candidate);
-
-      if (overflowed(measureBox)) {
-        high = mid - 1;
-      } else {
+      if (fits) {
         best = mid;
         low = mid + 1;
+      } else {
+        high = mid - 1;
       }
     }
 
-    return {
-      fitText: text.slice(0, best),
-      restText: text.slice(best),
-    };
+    return best;
   }
 
-  function splitSimpleElement(el, measureBox, currentNodes) {
-    const text = el.textContent ?? "";
-    const template = createElementLike(el);
+  // =========================
+  // 6) 「現在カーソルから1ページだけ」生成
+  // =========================
+  function generatePageFromCursor(startCursor) {
+    const cursor = cloneCursor(startCursor);
+    const currentNodes = [];
 
-    const { fitText, restText } = fitTextIntoElement(text, template, measureBox, currentNodes);
-
-    const fitNode = fitText ? createElementLike(el) : null;
-    if (fitNode) fitNode.textContent = fitText;
-
-    const restNode = restText ? createElementLike(el) : null;
-    if (restNode) restNode.textContent = restText;
-
-    return { fitNode, restNode };
-  }
-
-  function appendToMeasureIfFits(node, measureBox, currentNodes) {
-    measureBox.innerHTML = "";
-    currentNodes.forEach((n) => measureBox.appendChild(n.cloneNode(true)));
-    measureBox.appendChild(node.cloneNode(true));
-    return !overflowed(measureBox);
-  }
-
-  function buildPages() {
     const { box: measureBox, destroy } = createMeasureBox();
 
-    const built = [];
-    let currentNodes = [];
+    while (cursor.index < sourceItems.length) {
+      const item = sourceItems[cursor.index];
 
-    const sourceNodes = originalChildren.filter((n) => {
-      if (n.nodeType === Node.TEXT_NODE) {
-        return (n.textContent ?? "").trim() !== "";
-      }
-      return n.nodeType === Node.ELEMENT_NODE;
-    });
+      if (item.type === "complex-element") {
+        const node = item.template.cloneNode(true);
 
-    function commitPage() {
-      built.push(currentNodes.map((n) => n.cloneNode(true)));
-      currentNodes = [];
-    }
-
-    for (const node of sourceNodes) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        const p = document.createElement("p");
-        p.textContent = (node.textContent ?? "").trim();
-
-        if (appendToMeasureIfFits(p, measureBox, currentNodes)) {
-          currentNodes.push(p.cloneNode(true));
+        if (appendIfFits(measureBox, currentNodes, node)) {
+          currentNodes.push(node);
+          cursor.index += 1;
+          cursor.offset = 0;
           continue;
         }
 
-        const { fitNode, restNode } = splitSimpleElement(p, measureBox, currentNodes);
-
-        if (fitNode) {
-          currentNodes.push(fitNode.cloneNode(true));
+        if (currentNodes.length === 0) {
+          // 1ページに収まらない複雑要素は最小実装ではそのまま置く
+          currentNodes.push(node);
+          cursor.index += 1;
+          cursor.offset = 0;
         }
 
-        if (currentNodes.length) {
-          commitPage();
-        }
+        break;
+      }
 
-        let remaining = restNode;
-        while (remaining) {
-          if (appendToMeasureIfFits(remaining, measureBox, currentNodes)) {
-            currentNodes.push(remaining.cloneNode(true));
-            remaining = null;
-          } else {
-            const split = splitSimpleElement(remaining, measureBox, currentNodes);
-            if (!split.fitNode) break;
-            currentNodes.push(split.fitNode.cloneNode(true));
-            commitPage();
-            remaining = split.restNode;
-          }
-        }
+      // text-element
+      const text = item.text ?? "";
+      const startOffset = cursor.offset;
 
+      // すでに末尾なら次へ
+      if (startOffset >= text.length) {
+        cursor.index += 1;
+        cursor.offset = 0;
         continue;
       }
 
-      const el = /** @type {HTMLElement} */ (node);
+      const fullNode = createTextNodeFromItem(item, startOffset);
 
-      if (appendToMeasureIfFits(el, measureBox, currentNodes)) {
-        currentNodes.push(el.cloneNode(true));
+      if (appendIfFits(measureBox, currentNodes, fullNode)) {
+        currentNodes.push(fullNode);
+        cursor.index += 1;
+        cursor.offset = 0;
         continue;
       }
 
-      const hasElementChildren = el.querySelector("*") !== null;
+      const fitCount = countFitChars(item, startOffset, measureBox, currentNodes);
 
-      // シンプルなテキスト要素なら途中分割
-      if (!hasElementChildren && (el.textContent ?? "").trim() !== "") {
-        const { fitNode, restNode } = splitSimpleElement(el, measureBox, currentNodes);
-
-        if (fitNode) {
-          currentNodes.push(fitNode.cloneNode(true));
-        }
-
-        if (currentNodes.length) {
-          commitPage();
-        }
-
-        let remaining = restNode;
-        while (remaining) {
-          if (appendToMeasureIfFits(remaining, measureBox, currentNodes)) {
-            currentNodes.push(remaining.cloneNode(true));
-            remaining = null;
-          } else {
-            const split = splitSimpleElement(remaining, measureBox, currentNodes);
-            if (!split.fitNode) break;
-            currentNodes.push(split.fitNode.cloneNode(true));
-            commitPage();
-            remaining = split.restNode;
-          }
-        }
-      } else {
-        // 複雑要素は丸ごと次ページ
-        if (currentNodes.length) {
-          commitPage();
-        }
-        currentNodes.push(el.cloneNode(true));
+      if (fitCount > 0) {
+        const partialNode = createTextNodeFromItem(item, startOffset, startOffset + fitCount);
+        currentNodes.push(partialNode);
+        cursor.offset = startOffset + fitCount;
       }
-    }
 
-    if (currentNodes.length) {
-      commitPage();
+      break;
     }
 
     destroy();
 
-    pages = built.length ? built : [[]];
+    return {
+      startCursor: cloneCursor(startCursor),
+      endCursor: cloneCursor(cursor),
+      nodes: currentNodes.map((n) => n.cloneNode(true)),
+    };
   }
 
-  function renderPage(index) {
-    currentPageIndex = Math.max(0, Math.min(index, pages.length - 1));
-    page.innerHTML = "";
-    page.appendChild(makePageFragment(pages[currentPageIndex]));
-
-    getNowEl().textContent = String(currentPageIndex + 1);
-    getTotalEl().textContent = String(pages.length);
-
-    prevBtn.disabled = currentPageIndex <= 0;
-    nextBtn.disabled = currentPageIndex >= pages.length - 1;
+  // =========================
+  // 7) 描画 / ページ数表示
+  // =========================
+  function renderNodes(layer, nodes) {
+    layer.innerHTML = "";
+    for (const n of nodes) {
+      layer.appendChild(n.cloneNode(true));
+    }
   }
 
-  function repaginate(keepProgress = true) {
-    const oldCount = pages.length || 1;
-    const oldIndex = currentPageIndex;
+  function approximatePageNumber() {
+    return state.history.length + 1;
+  }
 
-    buildPages();
+  function updateInfo() {
+    getNowEl().textContent = String(approximatePageNumber());
+    getTotalEl().textContent = state.nextPage || (state.currentPage && isEndCursor(state.currentPage.endCursor))
+      ? "?"
+      : "?";
 
-    let nextIndex = 0;
-    if (keepProgress) {
-      const ratio = oldCount > 1 ? oldIndex / (oldCount - 1) : 0;
-      nextIndex = Math.round(ratio * Math.max(0, pages.length - 1));
+    prevBtn.disabled = state.history.length === 0 || state.isAnimating;
+    nextBtn.disabled = !!(state.currentPage && isEndCursor(state.currentPage.endCursor)) || state.isAnimating;
+  }
+
+  // =========================
+  // 8) 遅延で次ページを生成
+  // =========================
+  function scheduleNextPageWarmup() {
+    if (!state.currentPage) return;
+    if (isEndCursor(state.currentPage.endCursor)) {
+      state.nextPage = null;
+      updateInfo();
+      return;
+    }
+    if (state.nextPage && cursorEquals(state.nextPage.startCursor, state.currentPage.endCursor)) {
+      updateInfo();
+      return;
     }
 
-    renderPage(nextIndex);
+    const job = () => {
+      if (!state.currentPage) return;
+      state.nextPage = generatePageFromCursor(state.currentPage.endCursor);
+      updateInfo();
+    };
+
+    if ("requestIdleCallback" in window) {
+      window.requestIdleCallback(job, { timeout: 120 });
+    } else {
+      setTimeout(job, 0);
+    }
   }
 
-  prevBtn.addEventListener("click", () => renderPage(currentPageIndex - 1));
-  nextBtn.addEventListener("click", () => renderPage(currentPageIndex + 1));
+  // =========================
+  // 9) 初期化
+  // =========================
+  function initialize() {
+    state.history = [];
+    state.nextPage = null;
+    state.currentPage = generatePageFromCursor(makeCursor(0, 0));
+    renderNodes(currentLayer, state.currentPage.nodes);
+    incomingLayer.innerHTML = "";
+    incomingLayer.style.display = "none";
+    incomingLayer.style.transform = "translateX(100%)";
+    updateInfo();
+    scheduleNextPageWarmup();
+  }
+
+  // =========================
+  // 10) 次ページへ（右からスライドイン）
+  // =========================
+  function goNext() {
+    if (state.isAnimating || !state.currentPage) return;
+    if (isEndCursor(state.currentPage.endCursor)) return;
+
+    const targetPage = state.nextPage ?? generatePageFromCursor(state.currentPage.endCursor);
+    if (!targetPage || targetPage.nodes.length === 0) return;
+
+    state.isAnimating = true;
+    updateInfo();
+
+    renderNodes(incomingLayer, targetPage.nodes);
+    incomingLayer.style.display = "block";
+    incomingLayer.style.transform = "translateX(100%)";
+
+    // reflow
+    void incomingLayer.offsetWidth;
+
+    viewport.classList.remove("is-animating-prev");
+    viewport.classList.add("is-animating-next");
+
+    const done = () => {
+      viewport.classList.remove("is-animating-next");
+      incomingLayer.removeEventListener("transitionend", done);
+
+      // 履歴に現在ページを保存
+      state.history.push({
+        startCursor: cloneCursor(state.currentPage.startCursor),
+        endCursor: cloneCursor(state.currentPage.endCursor),
+        nodes: state.currentPage.nodes.map((n) => n.cloneNode(true)),
+      });
+
+      // current を次ページへ更新
+      state.currentPage = {
+        startCursor: cloneCursor(targetPage.startCursor),
+        endCursor: cloneCursor(targetPage.endCursor),
+        nodes: targetPage.nodes.map((n) => n.cloneNode(true)),
+      };
+
+      renderNodes(currentLayer, state.currentPage.nodes);
+
+      incomingLayer.innerHTML = "";
+      incomingLayer.style.display = "none";
+      incomingLayer.style.transform = "translateX(100%)";
+
+      state.nextPage = null;
+      state.isAnimating = false;
+      updateInfo();
+      scheduleNextPageWarmup();
+    };
+
+    incomingLayer.addEventListener("transitionend", done, { once: true });
+  }
+
+  // =========================
+  // 11) 前ページへ（履歴から復元）
+  // =========================
+  function goPrev() {
+    if (state.isAnimating) return;
+    if (state.history.length === 0) return;
+
+    const prevPage = state.history[state.history.length - 1];
+    if (!prevPage) return;
+
+    state.isAnimating = true;
+    updateInfo();
+
+    renderNodes(incomingLayer, prevPage.nodes);
+    incomingLayer.style.display = "block";
+    incomingLayer.style.transform = "translateX(-100%)";
+
+    // reflow
+    void incomingLayer.offsetWidth;
+
+    viewport.classList.remove("is-animating-next");
+    viewport.classList.add("is-animating-prev");
+
+    const done = () => {
+      viewport.classList.remove("is-animating-prev");
+      incomingLayer.removeEventListener("transitionend", done);
+
+      state.currentPage = state.history.pop();
+
+      renderNodes(currentLayer, state.currentPage.nodes);
+
+      incomingLayer.innerHTML = "";
+      incomingLayer.style.display = "none";
+      incomingLayer.style.transform = "translateX(100%)";
+
+      state.nextPage = null;
+      state.isAnimating = false;
+      updateInfo();
+      scheduleNextPageWarmup();
+    };
+
+    incomingLayer.addEventListener("transitionend", done, { once: true });
+  }
+
+  // =========================
+  // 12) イベント
+  // =========================
+  nextBtn.addEventListener("click", goNext);
+  prevBtn.addEventListener("click", goPrev);
 
   viewport.addEventListener("click", (e) => {
+    if (state.isAnimating) return;
     const rect = viewport.getBoundingClientRect();
     const x = e.clientX - rect.left;
 
-    // 右綴じなので右側タップで戻る、左側タップで進む
+    // 右綴じ: 左半分で次へ / 右半分で前へ
     if (x < rect.width / 2) {
-      renderPage(currentPageIndex + 1);
+      goNext();
     } else {
-      renderPage(currentPageIndex - 1);
+      goPrev();
     }
   });
 
   window.addEventListener("keydown", (e) => {
+    if (state.isAnimating) return;
     if (e.key === "ArrowLeft") {
-      renderPage(currentPageIndex + 1);
+      goNext();
     } else if (e.key === "ArrowRight") {
-      renderPage(currentPageIndex - 1);
+      goPrev();
     }
   });
 
   window.addEventListener("resize", () => {
-    clearTimeout(repaginateTimer);
-    repaginateTimer = setTimeout(() => repaginate(true), 120);
+    clearTimeout(state.repaginateTimer);
+    state.repaginateTimer = setTimeout(() => {
+      initialize();
+    }, 120);
   });
 
-  window.addEventListener("load", () => {
-    repaginate(false);
-  });
+  window.addEventListener("load", initialize);
 })();
